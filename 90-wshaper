@@ -11,18 +11,23 @@
 # This script is thought for hosts with a private IP inside a LAN,
 # not for routers or hosts with public IP
 
-# NetworkManager info:
+# NetworkManager info
 IF=$1
 STATUS=$2
-
+# Executables 
 TC="/sbin/tc"
 IPTABLES="/sbin/iptables"
-ETH_DOWNLINK=100000
-ETH_UPLINK=100000
-DOWNLINK=12000
-UPLINK=500
+# Internal LAN config
+# 100 Mb/s Ethernet
 DEV="p6p1"
 LOCALNET="192.168.10.0/24"
+ETH_DOWNLINK=100000
+ETH_UPLINK=100000
+# Internet bandwidth
+DOWNLINK=12000
+UPLINK=500
+# high priority destination ports
+HIPRIOPORTDST="53"
 # low priority source ports
 NOPRIOPORTSRC="4662 4672 4665 8333 51413"
 # low priority destination ports
@@ -50,16 +55,16 @@ fi
 
 if [ "$IF" = "$DEV" ] && [ "$STATUS" = "up" ]; then
 
-	###### uplink
+	########## uplink #############
 	# install root HTB, point default traffic to 1:20
+	$TC qdisc add dev $DEV root handle 1: htb default 20
 	# Class 1:1 Localnet
 	# Class 1:2 Internet
 	# Class 1:10 Internet - high priority
 	# Class 1:20 Internet - normal priority
 	# Class 1:30 Internet - low priority
-	$TC qdisc add dev $DEV root handle 1: htb default 20
 	$TC class add dev $DEV parent 1: classid 1:1 htb rate ${ETH_UPLINK}kbit ceil ${ETH_UPLINK}kbit burst 1024k prio 2
-	$TC class add dev $DEV parent 1:1 classid 1:2 htb rate ${UPLINK}kbit ceil ${UPLINK}kbit burst 6k prio 2
+	$TC class add dev $DEV parent 1:1 classid 1:2 htb rate ${UPLINK}kbit ceil ${UPLINK}kbit burst 256k prio 2
 	$TC class add dev $DEV parent 1:2 classid 1:10 htb rate $[6*$UPLINK/10]kbit ceil ${UPLINK}kbit burst 256k prio 1
 	$TC class add dev $DEV parent 1:2 classid 1:20 htb rate $[3*$UPLINK/10]kbit ceil ${UPLINK}kbit burst 64k prio 2
 	$TC class add dev $DEV parent 1:2 classid 1:30 htb rate $[$UPLINK/10]kbit ceil ${UPLINK}kbit burst 6k prio 3
@@ -74,11 +79,14 @@ if [ "$IF" = "$DEV" ] && [ "$STATUS" = "up" ]; then
 	$IPTABLES -t mangle -A POSTROUTING -j OUTPUT_QOS
 	$IPTABLES -t mangle -A OUTPUT_QOS -o $DEV -d $LOCALNET -j CLASSIFY --set-class 1:1
 	$IPTABLES -t mangle -A OUTPUT_QOS -o $DEV ! -d $LOCALNET -m tcp -p tcp --tcp-flags ACK ACK -j CLASSIFY --set-class 1:10
-	$IPTABLES -t mangle -A OUTPUT_QOS -o $DEV ! -d $LOCALNET -m udp -p udp --dport 53 -j CLASSIFY --set-class 1:10
-	$IPTABLES -t mangle -A OUTPUT_QOS -o $DEV ! -d $LOCALNET -m tcp -p tcp --dport 53 -j CLASSIFY --set-class 1:10
 	$IPTABLES -t mangle -A OUTPUT_QOS -o $DEV ! -d $LOCALNET -m tos --tos Minimize-Delay -j CLASSIFY --set-class 1:10
 	$IPTABLES -t mangle -A OUTPUT_QOS -o $DEV ! -d $LOCALNET -m icmp -p icmp --icmp-type echo-reply -j CLASSIFY --set-class 1:10
 	$IPTABLES -t mangle -A OUTPUT_QOS -o $DEV ! -d $LOCALNET -m icmp -p icmp --icmp-type echo-request -j CLASSIFY --set-class 1:10
+	for a in $HIPRIOPORTDST
+	do
+		$IPTABLES -t mangle -A OUTPUT_QOS -o $DEV ! -d $LOCALNET -m tcp -p tcp --dport $a -j CLASSIFY --set-class 1:10
+		$IPTABLES -t mangle -A OUTPUT_QOS -o $DEV ! -d $LOCALNET -m udp -p udp --dport $a -j CLASSIFY --set-class 1:10
+	done
 	for a in $NOPRIOPORTDST
         do
                 $IPTABLES -t mangle -A OUTPUT_QOS ! -d $LOCALNET -o $DEV -m tcp -p tcp --dport $a -j CLASSIFY --set-class 1:30

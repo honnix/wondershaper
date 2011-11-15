@@ -68,7 +68,6 @@ if [ "$IF" = "$DEV" ] && [ "$STATUS" = "up" ]; then
 	$TC class add dev $DEV parent 1:2 classid 1:10 htb rate $[6*$UPLINK/10]kbit ceil ${UPLINK}kbit burst 256k prio 1
 	$TC class add dev $DEV parent 1:2 classid 1:20 htb rate $[3*$UPLINK/10]kbit ceil ${UPLINK}kbit burst 64k prio 2
 	$TC class add dev $DEV parent 1:2 classid 1:30 htb rate $[$UPLINK/10]kbit ceil ${UPLINK}kbit burst 6k prio 3
-
 	# all get Stochastic Fairness:
 	$TC qdisc add dev $DEV parent 1:10 handle 10: sfq perturb 10
 	$TC qdisc add dev $DEV parent 1:20 handle 20: sfq perturb 10
@@ -104,31 +103,28 @@ if [ "$IF" = "$DEV" ] && [ "$STATUS" = "up" ]; then
 	# ISPs tend to have *huge* queues to make sure big downloads are fast
 	#
 	# attach ingress policer:
+	$TC qdisc add dev $DEV handle ffff: ingress
 
-	#$TC qdisc add dev $DEV handle ffff: ingress
-
-	# filter *everything* to it (0.0.0.0/0), drop everything that's
-	# coming in too fast:
+	# Mark in iptables the packets coming from Internet
+	# and drop if they are coming in too fast:
 	###### Iptables Filters
-	#$IPTABLES -t mangle -N INPUT_QOS
-	#$IPTABLES -t mangle -A PREROUTING -j INPUT_QOS
-	#$IPTABLES -t mangle -A INPUT_QOS -i $DEV ! -s $LOCALNET -j MARK --set-mark 3
-	#$TC filter add dev $DEV parent ffff: protocol ip prio 50 handle 3 \
-	#	police rate ${DOWNLINK}kbit burst 10k drop flowid :1
-	##$TC filter add dev $DEV parent ffff: protocol ip prio 50 u32 match ip src \
-	##   0.0.0.0/0 police rate ${DOWNLINK}kbit burst 10k drop flowid :1
+	$IPTABLES -t mangle -N INPUT_QOS
+	$IPTABLES -t mangle -A PREROUTING -j INPUT_QOS
+	$IPTABLES -t mangle -A INPUT_QOS -i $DEV ! -s $LOCALNET -j MARK --set-mark 3
+	$TC filter add dev $DEV parent ffff: protocol ip prio 50 handle 3 \
+		fw police rate ${DOWNLINK}kbit burst 10k drop flowid ffff:
 
 
 elif [ "$IF" = "$DEV" ] && [ "$STATUS" = "down" ]; then
 	# clean existing down- and uplink qdiscs, hide errors
         $TC qdisc del dev $DEV root >/dev/null 2>&1
-        #$TC qdisc del dev $DEV ingress >/dev/null 2>&1
+        $TC qdisc del dev $DEV ingress >/dev/null 2>&1
 
 	# Clean iptables rules	
 	$IPTABLES -t mangle -D POSTROUTING -j OUTPUT_QOS
 	$IPTABLES -t mangle -F OUTPUT_QOS
 	$IPTABLES -t mangle -X OUTPUT_QOS
-	#$IPTABLES -t mangle -D PREROUTING -j INPUT_QOS
-	#$IPTABLES -t mangle -F INPUT_QOS
-	#$IPTABLES -t mangle -X INPUT_QOS
+	$IPTABLES -t mangle -D PREROUTING -j INPUT_QOS
+	$IPTABLES -t mangle -F INPUT_QOS
+	$IPTABLES -t mangle -X INPUT_QOS
 fi

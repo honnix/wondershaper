@@ -1,6 +1,9 @@
 #!/bin/bash
-# Wonder Shaper
-#
+# Script based on The Wonder Shaper http://lartc.org/wondershaper/
+# Heavily modified by Juan Orti <j.orti.alcaine@gmail.com>
+# Licensed under the GPL
+
+
 # Set the following values to somewhat less than your actual download
 # and uplink speed. In kilobits. Also set the device that is to be shaped.
 

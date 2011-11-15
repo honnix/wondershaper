@@ -3,7 +3,7 @@
 # Heavily modified by Juan Orti <j.orti.alcaine@gmail.com>
 # Licensed under the GPL
 
-
+# Copy the script to /etc/NetworkManager/dispatcher.d and make it executable
 # Set the following values to somewhat less than your actual download
 # and uplink speed. In kilobits. Also set the device that is to be shaped.
 
@@ -46,12 +46,7 @@ fi
 
 if [ "$IF" = "$DEV" ] && [ "$STATUS" = "up" ]; then
 
-	# clean existing down- and uplink qdiscs, hide errors
-	$TC qdisc del dev $DEV root    2> /dev/null > /dev/null
-	$TC qdisc del dev $DEV ingress 2> /dev/null > /dev/null
-
 	###### uplink
-
 	# install root HTB, point default traffic to 1:20
 	# Class 1:1 Localnet
 	# Class 1:2 Internet
@@ -59,11 +54,11 @@ if [ "$IF" = "$DEV" ] && [ "$STATUS" = "up" ]; then
 	# Class 1:20 Internet - normal priority
 	# Class 1:30 Internet - low priority
 	$TC qdisc add dev $DEV root handle 1: htb default 20
-	$TC class add dev $DEV parent 1: classid 1:1 htb rate ${ETH_UPLINK}kbit ceil ${ETH_UPLINK}kbit burst 512k prio 4
-	$TC class add dev $DEV parent 1:1 classid 1:2 htb rate ${UPLINK}kbit ceil ${UPLINK}kbit burst 6k prio 3
-	$TC class add dev $DEV parent 1:2 classid 1:10 htb rate $[6*$UPLINK/10]kbit ceil ${UPLINK}kbit burst 6k prio 1
-	$TC class add dev $DEV parent 1:2 classid 1:20 htb rate $[3*$UPLINK/10]kbit ceil ${UPLINK}kbit burst 6k prio 2
-	$TC class add dev $DEV parent 1:2 classid 1:30 htb rate $[$UPLINK/10]kbit ceil ${UPLINK}kbit burst 6k prio 5
+	$TC class add dev $DEV parent 1: classid 1:1 htb rate ${ETH_UPLINK}kbit ceil ${ETH_UPLINK}kbit burst 1024k prio 2
+	$TC class add dev $DEV parent 1:1 classid 1:2 htb rate ${UPLINK}kbit ceil ${UPLINK}kbit burst 6k prio 2
+	$TC class add dev $DEV parent 1:2 classid 1:10 htb rate $[6*$UPLINK/10]kbit ceil ${UPLINK}kbit burst 256k prio 1
+	$TC class add dev $DEV parent 1:2 classid 1:20 htb rate $[3*$UPLINK/10]kbit ceil ${UPLINK}kbit burst 64k prio 2
+	$TC class add dev $DEV parent 1:2 classid 1:30 htb rate $[$UPLINK/10]kbit ceil ${UPLINK}kbit burst 6k prio 3
 
 	# all get Stochastic Fairness:
 	$TC qdisc add dev $DEV parent 1:10 handle 10: sfq perturb 10
@@ -83,21 +78,14 @@ if [ "$IF" = "$DEV" ] && [ "$STATUS" = "up" ]; then
 	for a in $NOPRIOPORTDST
         do
                 $IPTABLES -t mangle -A OUTPUT_QOS -o $DEV -m tcp -p tcp --dport $a -j CLASSIFY --set-class 1:30
+		$IPTABLES -t mangle -A OUTPUT_QOS -o $DEV -m udp -p udp --dport $a -j CLASSIFY --set-class 1:30
         done
 	for a in $NOPRIOPORTSRC
         do
 		$IPTABLES -t mangle -A OUTPUT_QOS -o $DEV -m tcp -p tcp --sport $a -j CLASSIFY --set-class 1:30
+		$IPTABLES -t mangle -A OUTPUT_QOS -o $DEV -m udp -p udp --sport $a -j CLASSIFY --set-class 1:30
         done
 	
-        # Localnet
-        #$TC filter add dev $DEV parent 1: protocol ip prio 10 handle 1 fw flowid 1:1
-        # Max priority
-        #$TC filter add dev $DEV parent 1: protocol ip prio 10 handle 10 fw flowid 1:10
-        # Medium priority
-        #$TC filter add dev $DEV parent 1: protocol ip prio 10 handle 20 fw flowid 1:20
-        # Low priority
-        #$TC filter add dev $DEV parent 1: protocol ip prio 10 handle 30 fw flowid 1:30
-
 	########## downlink #############
 	# slow downloads down to somewhat less than the real speed  to prevent 
 	# queuing at our ISP. Tune to see how high you can set it.
@@ -121,8 +109,10 @@ if [ "$IF" = "$DEV" ] && [ "$STATUS" = "up" ]; then
 
 elif [ "$IF" = "$DEV" ] && [ "$STATUS" = "down" ]; then
 	# clean existing down- and uplink qdiscs, hide errors
-        $TC qdisc del dev $DEV root    2> /dev/null > /dev/null
-        #$TC qdisc del dev $DEV ingress 2> /dev/null > /dev/null
+        $TC qdisc del dev $DEV root >/dev/null 2>&1
+        #$TC qdisc del dev $DEV ingress >/dev/null 2>&1
+
+	# Clean iptables rules	
 	$IPTABLES -t mangle -D POSTROUTING -j OUTPUT_QOS
 	$IPTABLES -t mangle -F OUTPUT_QOS
 	$IPTABLES -t mangle -X OUTPUT_QOS

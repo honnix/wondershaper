@@ -24,8 +24,8 @@ LOCALNET="192.168.10.0/24"
 ETH_DOWNLINK=100000
 ETH_UPLINK=100000
 # Internet bandwidth
-DOWNLINK=12000
-UPLINK=500
+DOWNLINK=11000
+UPLINK=600
 # high priority destination ports
 HIPRIOPORTDST="53"
 # low priority source ports
@@ -65,8 +65,8 @@ if [ "$IF" = "$DEV" ] && [ "$STATUS" = "up" ]; then
 	# Class 1:30 Internet - low priority
 	$TC class add dev $DEV parent 1: classid 1:1 htb rate ${ETH_UPLINK}kbit ceil ${ETH_UPLINK}kbit burst 1024k prio 2
 	$TC class add dev $DEV parent 1:1 classid 1:2 htb rate ${UPLINK}kbit ceil ${UPLINK}kbit burst 256k prio 2
-	$TC class add dev $DEV parent 1:2 classid 1:10 htb rate $[6*$UPLINK/10]kbit ceil ${UPLINK}kbit burst 256k prio 1
-	$TC class add dev $DEV parent 1:2 classid 1:20 htb rate $[3*$UPLINK/10]kbit ceil ${UPLINK}kbit burst 64k prio 2
+	$TC class add dev $DEV parent 1:2 classid 1:10 htb rate $[7*$UPLINK/10]kbit ceil ${UPLINK}kbit burst 256k prio 1
+	$TC class add dev $DEV parent 1:2 classid 1:20 htb rate $[2*$UPLINK/10]kbit ceil ${UPLINK}kbit burst 64k prio 2
 	$TC class add dev $DEV parent 1:2 classid 1:30 htb rate $[$UPLINK/10]kbit ceil ${UPLINK}kbit burst 6k prio 3
 	# all get Stochastic Fairness:
 	$TC qdisc add dev $DEV parent 1:10 handle 10: sfq perturb 10

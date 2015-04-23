@@ -64,7 +64,7 @@ if [ "$IF" = "$DEV" ] && [ "$STATUS" = "up" ]; then
 	# Class 1:20 Internet - normal priority
 	# Class 1:30 Internet - low priority
 	$TC class add dev $DEV parent 1: classid 1:1 htb rate ${ETH_UPLINK}kbit ceil ${ETH_UPLINK}kbit burst 1024k prio 2
-	$TC class add dev $DEV parent 1:1 classid 1:2 htb rate ${UPLINK}kbit ceil ${UPLINK}kbit burst 256k prio 2
+	$TC class add dev $DEV parent 1: classid 1:2 htb rate ${UPLINK}kbit ceil ${UPLINK}kbit burst 256k prio 2
 	$TC class add dev $DEV parent 1:2 classid 1:10 htb rate $[8*$UPLINK/10]kbit ceil ${UPLINK}kbit burst 256k prio 1
 	$TC class add dev $DEV parent 1:2 classid 1:20 htb rate $[2*$UPLINK/10]kbit ceil ${UPLINK}kbit burst 64k prio 2
 	$TC class add dev $DEV parent 1:2 classid 1:30 htb rate 1kbit ceil ${UPLINK}kbit burst 6k prio 3
